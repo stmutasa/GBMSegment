@@ -18,7 +18,7 @@ FLAGS = tf.app.flags.FLAGS
 # Define some of the data variables
 tf.app.flags.DEFINE_string('data_dir', 'data/', """Path to the data directory.""")
 tf.app.flags.DEFINE_string('training_dir', 'training/', """Path to the training directory.""")
-tf.app.flags.DEFINE_string('test_files', '1', """Testing files""")
+tf.app.flags.DEFINE_string('test_files', '2', """Testing files""")
 tf.app.flags.DEFINE_integer('box_dims', 256, """dimensions to save files""")
 tf.app.flags.DEFINE_integer('network_dims', 128, """Center: 80/208 for 128/256""")
 tf.app.flags.DEFINE_integer('slice_gap', 2, """Slice spacing for pre processing in mm""")
@@ -26,7 +26,7 @@ tf.app.flags.DEFINE_float('noise_threshold', 10, 'Amount of Gaussian noise to ap
 
 # Define some of the immutable variables
 tf.app.flags.DEFINE_integer('num_epochs', 300, """Number of epochs to run""")
-tf.app.flags.DEFINE_integer('epoch_size', 10600, """How many examples""")
+tf.app.flags.DEFINE_integer('epoch_size', 7986, """How many examples""")
 tf.app.flags.DEFINE_float('print_interval', 1, """How often to print a summary in epochs""")
 tf.app.flags.DEFINE_integer('checkpoint_interval', 50, """How many Epochs to wait before saving a checkpoint""")
 tf.app.flags.DEFINE_integer('batch_size', 32, """Number of images to process in a batch.""")
@@ -49,7 +49,7 @@ def train():
     with tf.Graph().as_default():
 
         # Load the images and labels.
-        data, _ = network.inputs(skip=False)
+        data, _ = network.inputs(skip=True)
 
         # Define phase of training
         phase_train = tf.placeholder(tf.bool)

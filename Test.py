@@ -26,13 +26,13 @@ FLAGS = tf.app.flags.FLAGS
 # Define some of the immutable variables
 tf.app.flags.DEFINE_string('data_dir', 'data/', """Path to the data directory.""")
 tf.app.flags.DEFINE_string('testing_dir', 'testing/', """Path to the testing directory.""")
-tf.app.flags.DEFINE_string('test_files', '1', """Testing files""")
+tf.app.flags.DEFINE_string('test_files', '2', """Testing files""")
 tf.app.flags.DEFINE_integer('box_dims', 256, """dimensions to save files""")
 tf.app.flags.DEFINE_integer('network_dims', 128, """dimensions for the network input""")
 tf.app.flags.DEFINE_float('noise_threshold', 10, 'Amount of Gaussian noise to apply')
 
 # Define some of the immutable variables
-tf.app.flags.DEFINE_integer('epoch_size', 2135, """How many examples""")
+tf.app.flags.DEFINE_integer('epoch_size', 1769, """How many examples""")
 tf.app.flags.DEFINE_integer('batch_size', 8, """Number of images to process in a batch.""")
 
 # Hyperparameters:

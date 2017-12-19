@@ -203,31 +203,14 @@ def load_protobuf():
 
     # Image augmentation. First calc rotation parameters
     angle = tf.random_uniform([1], -0.52, 0.52)
-    image = tf.add(image, 200.0)
 
     # Random rotate
     image = tf.contrib.image.rotate(image, angle)
     label = tf.contrib.image.rotate(label, angle)
 
-    # Return image to center
-    image = tf.subtract(image, 200.0)
-
-    # Random gaussian noise
-    image = tf.image.random_brightness(image, max_delta=5)
-    image = tf.image.random_contrast(image, lower=0.95, upper=1.05)
-
     # Reshape image
     image = tf.image.resize_images(image, [FLAGS.network_dims, FLAGS.network_dims])
     label = tf.image.resize_images(label, [FLAGS.network_dims, FLAGS.network_dims])
-
-    # For noise, first randomly determine how 'noisy' this study will be
-    T_noise = tf.random_uniform([1], 0, FLAGS.noise_threshold)
-
-    # Create a poisson noise array
-    noise = tf.random_uniform(shape=[5, FLAGS.network_dims, FLAGS.network_dims, 1], minval=-T_noise, maxval=T_noise)
-
-    # Add the gaussian noise
-    image = tf.add(image, tf.cast(noise, tf.float32))
 
     # Display the images
     tf.summary.image('Train IMG', tf.reshape(image[2], shape=[1, FLAGS.network_dims, FLAGS.network_dims, 1]), 8)

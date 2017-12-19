@@ -87,7 +87,7 @@ def forward_pass(images, phase_train):
     # Bottom of the decoder: 7x7
     conv5 = sdn.inception_layer('conv5_Inception', conv4, 128, 1, 'SAME', phase_train, BN=False, relu=False)
     conv5 = sdn.residual_layer('Conv5', conv5, 3, 128, 1, K_prob=FLAGS.dropout_factor, padding='SAME', phase_train=phase_train, BN=True, relu=True)
-    conv5 = sdn.inception_layer('Conv5_Inception2', conv5, 128, phase_train=phase_train, dropout=FLAGS.dropout_factor)
+    conv5 = sdn.inception_layer('Conv5_Inception2', conv5, 128, phase_train=phase_train)
     print('End Encoder: ', conv5)
 
     # Upsample 1
