@@ -11,6 +11,7 @@ import time
 import GBMSeg as network
 import numpy as np
 import tensorflow as tf
+import tensorflow.contrib.slim as slim
 
 # Define flags
 FLAGS = tf.app.flags.FLAGS
@@ -18,35 +19,40 @@ FLAGS = tf.app.flags.FLAGS
 # Define some of the data variables
 tf.app.flags.DEFINE_string('data_dir', 'data/', """Path to the data directory.""")
 tf.app.flags.DEFINE_string('training_dir', 'training/', """Path to the training directory.""")
-tf.app.flags.DEFINE_string('test_files', '2', """Testing files""")
+tf.app.flags.DEFINE_string('test_files', '1', """Testing files""")
 tf.app.flags.DEFINE_integer('box_dims', 256, """dimensions to save files""")
 tf.app.flags.DEFINE_integer('network_dims', 128, """Center: 80/208 for 128/256""")
 tf.app.flags.DEFINE_integer('slice_gap', 2, """Slice spacing for pre processing in mm""")
-tf.app.flags.DEFINE_float('noise_threshold', 10, 'Amount of Gaussian noise to apply')
+tf.app.flags.DEFINE_integer('num_classes', 2, """Number of classes""")
 
 # Define some of the immutable variables
-tf.app.flags.DEFINE_integer('num_epochs', 300, """Number of epochs to run""")
-tf.app.flags.DEFINE_integer('epoch_size', 7986, """How many examples""")
-tf.app.flags.DEFINE_float('print_interval', 1, """How often to print a summary in epochs""")
-tf.app.flags.DEFINE_integer('checkpoint_interval', 50, """How many Epochs to wait before saving a checkpoint""")
+tf.app.flags.DEFINE_integer('num_epochs', 200, """Number of epochs to run""")
+tf.app.flags.DEFINE_integer('epoch_size', 28080, """How many examples""")
+tf.app.flags.DEFINE_integer('print_interval', 1, """How often to print a summary to console during training""")
+tf.app.flags.DEFINE_integer('checkpoint_interval', 25, """How many Epochs to wait before saving a checkpoint""")
 tf.app.flags.DEFINE_integer('batch_size', 32, """Number of images to process in a batch.""")
 
 # Hyperparameters:
 tf.app.flags.DEFINE_float('dropout_factor', 0.75, """ Keep probability""")
 tf.app.flags.DEFINE_float('l2_gamma', 1e-5, """ The gamma value for regularization loss""")
 tf.app.flags.DEFINE_float('moving_avg_decay', 0.999, """ The decay rate for the moving average tracker""")
-tf.app.flags.DEFINE_float('loss_factor',3.0, """The loss weighting factor""")
-tf.app.flags.DEFINE_float('dice_threshold', 1.0, """ The threshold value to declare no PE""")
+tf.app.flags.DEFINE_float('loss_factor',1.1, """The loss weighting factor""")
+tf.app.flags.DEFINE_float('dice_threshold', 1.0, """ The threshold value to declare GBM""")
 
 # Hyperparameters to control the optimizer
 tf.app.flags.DEFINE_float('learning_rate',1e-3, """Initial learning rate""")
 tf.app.flags.DEFINE_float('beta1', 0.9, """ The beta 1 value for the adam optimizer""")
 tf.app.flags.DEFINE_float('beta2', 0.999, """ The beta 1 value for the adam optimizer""")
 
+# Directory control
+tf.app.flags.DEFINE_string('train_dir', 'training/', """Directory to write event logs and save checkpoint files""")
+tf.app.flags.DEFINE_string('RunInfo', 'First_Run/', """Unique file name for this training run""")
+tf.app.flags.DEFINE_integer('GPU', 0, """Which GPU to use""")
+
 def train():
 
-    # First, make this the default graph where all ops will be added
-    with tf.Graph().as_default():
+    # Makes this the default graph where all ops will be added
+    with tf.Graph().as_default(), tf.device('/gpu:' + str(FLAGS.GPU)):
 
         # Load the images and labels.
         data, _ = network.inputs(skip=True)
@@ -55,10 +61,10 @@ def train():
         phase_train = tf.placeholder(tf.bool)
 
         # Perform the forward pass:
-        logits, l2loss = network.forward_pass(data['image'], phase_train=phase_train)
+        logits, l2loss = network.forward_pass_res(data['image_data'], phase_train=phase_train)
 
         # Calculate loss
-        SCE_loss = network.total_loss(logits, data['label'], loss_type='DICE')
+        SCE_loss = network.total_loss(logits, data['label_data'], loss_type='DICE')
 
         # Add the L2 regularization loss
         loss = tf.add(SCE_loss, l2loss, name='TotalLoss')
@@ -67,8 +73,7 @@ def train():
         extra_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
 
         # Retreive the training operation with the applied gradients
-        with tf.control_dependencies(extra_update_ops):
-            train_op = network.backward_pass(loss)
+        with tf.control_dependencies(extra_update_ops): train_op = network.backward_pass(loss)
 
         # -------------------  Housekeeping functions  ----------------------
 
@@ -89,6 +94,12 @@ def train():
 
         # -------------------  Session Initializer  ----------------------
 
+        # Set the intervals
+        max_steps = int((FLAGS.epoch_size / FLAGS.batch_size) * FLAGS.num_epochs)
+        print_interval = int((FLAGS.epoch_size / FLAGS.batch_size) * FLAGS.print_interval)
+        checkpoint_interval = int((FLAGS.epoch_size / FLAGS.batch_size) * FLAGS.checkpoint_interval)
+        print('Max Steps: %s, Print Interval: %s, Checkpoint: %s' % (max_steps, print_interval, checkpoint_interval))
+
         # Allow memory placement growth
         config = tf.ConfigProto(log_device_placement=False, allow_soft_placement=True)
         config.gpu_options.allow_growth = True
@@ -98,37 +109,25 @@ def train():
             mon_sess.run(var_init)
 
             # Initialize the handle to the summary writer in our training directory
-            summary_writer = tf.summary.FileWriter('training/Log1/', mon_sess.graph)
-
-            # Initialize the thread coordinator
-            coord = tf.train.Coordinator()
-
-            # Start the queue runners
-            threads = tf.train.start_queue_runners(sess=mon_sess, coord=coord)
+            summary_writer = tf.summary.FileWriter(FLAGS.train_dir + FLAGS.RunInfo, mon_sess.graph)
 
             # Initialize the step counter
-            step, timer = 0, 0
+            timer = 0
 
-            # Set the intervals
-            max_steps = (FLAGS.epoch_size / FLAGS.batch_size) * FLAGS.num_epochs
-            print_interval = int((FLAGS.epoch_size / FLAGS.batch_size) * FLAGS.print_interval)
-            checkpoint_interval = int((FLAGS.epoch_size / FLAGS.batch_size) * FLAGS.checkpoint_interval)
-            print ('Max Steps: %s, Print Interval: %s, Checkpoint: %s' %(max_steps, print_interval, checkpoint_interval))
+            # Use slim to handle queues:
+            with slim.queues.QueueRunners(mon_sess):
+                for i in range(max_steps):
 
-            try:
-                while step <= max_steps:
-
-                    # Timers
+                    # Run and time an iteration
                     start = time.time()
-
-                    # Run an iteration
                     mon_sess.run(train_op, feed_dict={phase_train: True})
-
-                    # Calc elapsed time
                     timer += (time.time() - start)
 
+                    # Calculate current epoch
+                    Epoch = int((i * FLAGS.batch_size) / FLAGS.epoch_size)
+
                     # Console and Tensorboard print interval
-                    if step % print_interval == 0:
+                    if i % print_interval == 0:
 
                         # First retreive the loss values
                         l2, sce, tot = mon_sess.run([l2loss, SCE_loss, loss], feed_dict={phase_train: True})
@@ -141,7 +140,7 @@ def train():
                         timer = 0
 
                         # Calc epoch
-                        Epoch = int((step * FLAGS.batch_size) / FLAGS.epoch_size)
+                        Epoch = int((i * FLAGS.batch_size) / FLAGS.epoch_size)
 
                         # Now print the loss values
                         print ('-'*70)
@@ -152,54 +151,30 @@ def train():
                         summary = mon_sess.run(all_summaries, feed_dict={phase_train: True})
 
                         # Add the summaries to the protobuf for Tensorboard
-                        summary_writer.add_summary(summary, step)
+                        summary_writer.add_summary(summary, i)
 
                         # Timer
                         start_time = time.time()
 
-                    if step % checkpoint_interval == 0:
+                    if i % checkpoint_interval == 0:
 
-                        # Calc epoch
-                        Epoch = int((step * FLAGS.batch_size) / FLAGS.epoch_size)
-
-                        print('-' * 70)
-                        print('Saving... Epoch: %s' %Epoch)
+                        print('-' * 70, '\nSaving... GPU: %s, File:%s' % (FLAGS.GPU, FLAGS.RunInfo[:-1]))
 
                         # Define the filename
                         file = ('Epoch_%s' % Epoch)
 
                         # Define the checkpoint file:
-                        checkpoint_file = os.path.join('training/', file)
+                        checkpoint_file = os.path.join(FLAGS.train_dir + FLAGS.RunInfo, file)
 
                         # Save the checkpoint
                         saver.save(mon_sess, checkpoint_file)
 
-                    # Increment step
-                    step += 1
-
-            except tf.errors.OutOfRangeError:
-                print('Done with Training - Epoch limit reached')
-
-            finally:
-
-                # Save the final checkpoint
-                print(" ---------------- SAVING FINAL CHECKPOINT ------------------ ")
-                saver.save(mon_sess, 'training/CheckpointFinal')
-
-                # Stop threads when done
-                coord.request_stop()
-
-                # Wait for threads to finish before closing session
-                coord.join(threads, stop_grace_period_secs=60)
-
-                # Shut down the session
-                mon_sess.close()
-
 
 def main(argv=None):  # pylint: disable=unused-argument
-    if tf.gfile.Exists(FLAGS.training_dir):
-        tf.gfile.DeleteRecursively(FLAGS.training_dir)
-    tf.gfile.MakeDirs(FLAGS.training_dir)
+    time.sleep(0)
+    if tf.gfile.Exists(FLAGS.train_dir + FLAGS.RunInfo):
+        tf.gfile.DeleteRecursively(FLAGS.train_dir + FLAGS.RunInfo)
+    tf.gfile.MakeDirs(FLAGS.train_dir + FLAGS.RunInfo)
     train()
 
 if __name__ == '__main__':

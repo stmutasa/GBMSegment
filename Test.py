@@ -12,7 +12,7 @@ import SODTester as SDT
 import SODLoader as SDL
 import numpy as np
 import tensorflow as tf
-import matplotlib.pyplot as plt
+import tensorflow.contrib.slim as slim
 
 # Define an instance of the loader and testing file
 sdl = SDL.SODLoader(os.getcwd())
@@ -26,13 +26,14 @@ FLAGS = tf.app.flags.FLAGS
 # Define some of the immutable variables
 tf.app.flags.DEFINE_string('data_dir', 'data/', """Path to the data directory.""")
 tf.app.flags.DEFINE_string('testing_dir', 'testing/', """Path to the testing directory.""")
-tf.app.flags.DEFINE_string('test_files', '2', """Testing files""")
+tf.app.flags.DEFINE_string('test_files', '1', """Testing files""")
 tf.app.flags.DEFINE_integer('box_dims', 256, """dimensions to save files""")
 tf.app.flags.DEFINE_integer('network_dims', 128, """dimensions for the network input""")
 tf.app.flags.DEFINE_float('noise_threshold', 10, 'Amount of Gaussian noise to apply')
+tf.app.flags.DEFINE_integer('num_classes', 2, """Number of classes""")
 
 # Define some of the immutable variables
-tf.app.flags.DEFINE_integer('epoch_size', 1769, """How many examples""")
+tf.app.flags.DEFINE_integer('epoch_size', 9360, """How many examples""")
 tf.app.flags.DEFINE_integer('batch_size', 8, """Number of images to process in a batch.""")
 
 # Hyperparameters:
@@ -42,11 +43,16 @@ tf.app.flags.DEFINE_float('dice_threshold', 0.1, """ The threshold value to decl
 tf.app.flags.DEFINE_float('size_threshold', 1.0, """ The size threshold value to declare detected PE""")
 tf.app.flags.DEFINE_float('l2_gamma', 1e-5, """ The gamma value for regularization loss""")
 
+# Directory control
+tf.app.flags.DEFINE_string('train_dir', 'training/', """Directory to write event logs and save checkpoint files""")
+tf.app.flags.DEFINE_string('RunInfo', 'First_Run/', """Unique file name for this training run""")
+tf.app.flags.DEFINE_integer('GPU', 0, """Which GPU to use""")
+
 # Define a custom training class
-def test():
+def eval():
 
     # Makes this the default graph where all ops will be added
-    with tf.Graph().as_default():
+    with tf.Graph().as_default(), tf.device('cpu:0'):
 
         # Load the images and labels.
         _, validation = network.inputs(skip=True)
@@ -55,7 +61,11 @@ def test():
         phase_train = tf.placeholder(tf.bool)
 
         # Perform the forward pass:
-        logits, l2loss = network.forward_pass(validation['image'], phase_train=phase_train)
+        if FLAGS.network_dims == 128: logits, l2loss = network.forward_pass_res(validation['image_data'], phase_train=phase_train)
+        else: logits, l2loss = network.forward_pass_peter_256(validation['image_data'], phase_train=phase_train)
+
+        # To retreive labels
+        labels = validation['label_data']
 
         # Retreive the softmax for testing purposes
         softmax = tf.nn.softmax(logits)
@@ -96,23 +106,22 @@ def test():
                     # Extract the epoch
                     Epoch = ckpt.model_checkpoint_path.split('/')[-1].split('_')[-1]
 
-                # Initialize the thread coordinator
-                coord = tf.train.Coordinator()
-
-                # Start the queue runners
-                threads = tf.train.start_queue_runners(sess=mon_sess, coord=coord)
-
                 # Initialize the step counter
                 tot, TP, TN, FP, FN, DICE, total, step = 0, 0, 0, 0, 0, 0, 1e-8, 0
+                sdt = SDT.SODTester(False, False)
+                display_lab, display_log, display_img = [], [], []
+                avg_softmax, ground_truth = [], []
 
                 # Set the max step count
                 max_steps = int(FLAGS.epoch_size / FLAGS.batch_size)
 
-                try:
-                    while step < max_steps:
+                # Use slim to handle queues:
+                with slim.queues.QueueRunners(mon_sess):
+
+                    for i in range(max_steps):
 
                         # Retreive the predictions and labels
-                        preds, labs, egs = mon_sess.run([softmax, validation['label'], validation], feed_dict={phase_train: False})
+                        preds, labs, egs = mon_sess.run([softmax, labels, validation], feed_dict={phase_train: False})
 
                         # Get metrics
                         Dixe = sdt.calc_metrics_segmentation(preds, labs, egs['patient'], dice_threshold=FLAGS.dice_threshold, batch_size=FLAGS.batch_size)
@@ -124,7 +133,7 @@ def test():
                         # Convert inputs to numpy arrays
                         p11 = np.squeeze(preds.astype(np.float))
                         l11 = np.squeeze(labs.astype(np.float))
-                        eg = np.squeeze(egs['image'].astype(np.float))
+                        eg = np.squeeze(egs['image_data'].astype(np.float))
                         picd = []
 
                         for i in range(FLAGS.batch_size):
@@ -156,12 +165,12 @@ def test():
                             elif np.sum(p2) == 0 and np.sum(p1) > FLAGS.size_threshold: FP += 1
                             tot += 1
 
-                        #     # Generate an overlay display
-                        #     if np.sum(p2) > 5: picd.append(sdl.display_overlay(eg[i, 2], p1))
-                        #
-                        # # Show the images
-                        # try: sdl.display_volume(np.asarray(picd), True)
-                        # except: pass
+                            # Generate an overlay display
+                            if np.sum(p2) > 5: picd.append(sdl.display_overlay(eg[i, 2], p1))
+
+                        # Show the images
+                        try: sdl.display_volume(np.asarray(picd), True)
+                        except: pass
 
                         # Garbage collection
                         del preds, labs, egs, eg, picd
@@ -171,25 +180,12 @@ def test():
 
                         if step % 10 == 0: print ('Step %s of %s done' %(step, max_steps))
 
-                except tf.errors.OutOfRangeError:
-                    print('Done with Training - Epoch limit reached')
-
-                finally:
-
                     # Print final errors here
                     DICE_Score = DICE/total
                     print ('DICE Score: %s', (DICE_Score))
                     print('TP: %s, TN: %s, FP: %s, FN: %s, Slices: %s' % (TP, TN, FP, FN, tot))
                     print ('Sensitivity: %.2f %%, Specificity: %.2f %%' %((100*TP / (TP + FN)), (100* TN / (TN + FP))))
 
-                    # Stop threads when done
-                    coord.request_stop()
-
-                    # Wait for threads to finish before closing session
-                    coord.join(threads, stop_grace_period_secs=20)
-
-                    # Shut down the session
-                    mon_sess.close()
 
             # Break if this is the final checkpoint
             if 'Final' in Epoch: break
@@ -200,10 +196,10 @@ def test():
 
 def main(argv=None):  # pylint: disable=unused-argument
     time.sleep(0)
-    if tf.gfile.Exists(FLAGS.testing_dir):
-        tf.gfile.DeleteRecursively(FLAGS.testing_dir)
-    tf.gfile.MakeDirs(FLAGS.testing_dir)
-    test()
+    if tf.gfile.Exists('testing/' + FLAGS.RunInfo):
+        tf.gfile.DeleteRecursively('testing/' + FLAGS.RunInfo)
+    tf.gfile.MakeDirs('testing/' + FLAGS.RunInfo)
+    eval()
 
 
 if __name__ == '__main__':

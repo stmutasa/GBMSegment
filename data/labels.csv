@@ -1,0 +1,78 @@
+ID,MRN,ACCNO,LABEL,TEXT
+1,7647499,4178333,1,"recurrent, with treatment effect"
+2,5130612,4522856,1,recurrent?
+3,7626234,4771262,1,"recurrent, with treatment effect"
+4,7751641,4794864,1,"recurrent, with treatment effect"
+5,7933505,4801008,0,residual
+6,5007756,4807171,1,"recurrent, with treatment effect"
+7,7936266,4852441,0,"residual, with treatment effect"
+8,7676786,4887556,1,"recurrent, with treatment effect"
+9,7924429,4916118,1,recurrent
+10,5624638,4362964,1,recurrent
+11,7814014,4761245,1,"recurrent, with treatment effect"
+12,8044136,5144093,1,"recurrent, with treatment effect"
+13,7885214,5042316,1,"recurrent, with treatment effect"
+14,6931858,5180339,1,"recurrent, with treatment effect"
+15,6031452,5165843,1,"recurrent, with treatment effect"
+16,7681975,5148345,1,"recurrent, with treatment effect"
+17,4656302,5129491,1,"recurrent, with treatment effect"
+18,7874620,5237835,1,"recurrent, with treatment effect"
+19,7190067,3965403,1,"recurrent, with treatment effect"
+20,7621764,3934659,1,"recurrent, with treatment effect"
+21,6101467,4012085,1,"recurrent, with treatment effect"
+22,6885408,3054755,1,"recurrent, with treatment effect"
+23,6837033,3625991,1,"recurrent, with treatment effect"
+24,7229945,4003339,1,"recurrent, with treatment effect"
+25,7145862,4053744,1,"recurrent, with treatment effect"
+26,6569935,4075314,1,"recurrent/residual, with treatment effect"
+27,6996319,4150137,1,"recurrent, with treatment effect"
+28,7091930,3422045,1,"recurrent, with treatment effect"
+29,6820494,4224746,1,"recurrent, with treatment effect"
+30,7749601,4267400,1,"recurrent, with treatment effect"
+31,7219233,4254778,1,"recurrent, with treatment effect"
+32,7693150,4273127,1,"recurrent, with treatment effect"
+33,3768514,4134252,1,"recurrent, with treatment effect"
+34,7579079,4022066,0,"residual, with treatment effect"
+35,4371142,4016524,1,recurrent
+36,6573714,4303083,1,recurrent
+37,7195390,3931545,1,"recurrent, with treatment effect"
+38,7222688,4369443,0,"residual, with treatment effect"
+39,4568491,4282177,1,"recurrent, with treatment effect"
+40,2303992,4551831,1,"recurrent, with treatment effect"
+41,5999343,4602032,0,"residual, with treatment effect"
+42,7813338,4616129,1,"recurrent, with treatment effect"
+43,7710206,4638487,1,"recurrent, with treatment effect"
+44,7118155,4444886,1,recurrent
+45,3262663,4662773,1,"recurrent, with treatment effect"
+46,7718535,4665363,0,"residual, with treatment effect"
+47,6652144,2554559,1,"recurrent, with treatment effect"
+48,7815444,4649945,1,"recurrent, with treatment effect"
+49,5476471,4651171,1,recurrent
+50,7924429,4780994,0,residual
+51,5624638,1964020,0,residual
+52,6931858,3330435,0,residual
+53,6031452,5219568,0,residual
+54,6885408,3535769,0,residual
+55,6837033,3203939,0,residual
+56,6996319,3593007,0,residual
+57,7091930,3632404,0,residual
+58,6820494,3495358,0,residual
+59,3768514,3576100,0,residual
+60,4568491,2873496,0,residual
+61,5999343,3788148,0,residual
+62,7118155,3587284,0,residual
+63,7647499,4693261,1,"recurrent, with treatment effect"
+64,5130612,4728574,0,"residual, with treatment effect"
+65,7626234,4862049,1,"recurrent, with treatment effect"
+66,7751641,4801622,0,residual
+67,7933505,5392377,1,"recurrent, with treatment effect"
+68,5624638,4895844,1,recurrent
+69,7885214,5285853,1,"recurrent, with treatment effect"
+70,6885408,3986518,1,"recurrent, with treatment effect"
+71,6837033,3979169,1,"recurrent, with treatment effect"
+72,7145862,4366350,1,"recurrent, with treatment effect"
+73,7579079,5322961,0,"residual, with treatment effect (mostly treatment effect)"
+74,4371142,4274195,0,"residual, with treatment effect (mostly treatment effect)"
+75,7195390,4312786,0,"residual, with treatment effect"
+76,7118155,4472462,1,"recurrent, with treatment effect"
+77,5130612,4704883,1,unknown

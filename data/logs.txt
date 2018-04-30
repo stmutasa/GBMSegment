@@ -1,0 +1,8 @@
+Non Existant file found: {'LABEL': '1', 'TEXT': 'recurrent, with treatment effect', 'ACCNO': '4551831', 'MRN': '2303992'}
+Non Existant file found: {'LABEL': '1', 'TEXT': 'recurrent?', 'ACCNO': '4522856', 'MRN': '5130612'}
+15 Patients loaded, 2031 slices saved (2031 this protobuf)
+30 Patients loaded, 3800 slices saved (1769 this protobuf)
+45 Patients loaded, 5715 slices saved (1915 this protobuf)
+60 Patients loaded, 7871 slices saved (2156 this protobuf)
+75 Patients loaded, 9755 slices saved (1884 this protobuf)
+9755 total
