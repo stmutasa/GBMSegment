@@ -55,7 +55,7 @@ def train():
     with tf.Graph().as_default(), tf.device('/gpu:' + str(FLAGS.GPU)):
 
         # Load the images and labels.
-        data, _ = network.inputs(skip=True)
+        data, _ = network.inputs(skip=False)
 
         # Define phase of training
         phase_train = tf.placeholder(tf.bool)

@@ -18,9 +18,10 @@ from random import shuffle
 FLAGS = tf.app.flags.FLAGS
 
 # Define the data directory to use
-home_dir = str(Path.home()) + '/PycharmProjects/Datasets/BRATS2015/'
+brats_dir = str(Path.home()) + '/PycharmProjects/Datasets/BRATS2015/'
+cumc_dir = str(Path.home()) + '/PycharmProjects/Datasets/GBM/TxResponse/'
 
-sdl = SDL.SODLoader(data_root=home_dir)
+sdl = SDL.SODLoader(data_root=brats_dir)
 
 # For loading the files for a 2.5 D network
 def pre_proc_25D(slice_gap, dims):
@@ -36,7 +37,7 @@ def pre_proc_25D(slice_gap, dims):
     check_labels()
 
     # Load the files
-    filenames = sdl.retreive_filelist('gz', include_subfolders=True, path='data/raw/')
+    filenames = sdl.retreive_filelist('gz', include_subfolders=True, path=cumc_dir)
     shuffle(filenames)
     print('Filenames: ', filenames)
 
@@ -78,24 +79,12 @@ def pre_proc_25D(slice_gap, dims):
         vol_file = lbl_file[:-13] + '.nii.gz'
         volume = np.squeeze(sdl.load_NIFTY(vol_file)).astype(np.int16)
 
-        # Reshape all to xxx
-        new_dims = 512
-        if segments.shape[-1] != new_dims:
+        # Normalize the MRI
+        volume = sdl.normalize_MRI_histogram(volume)
 
-            # Create empty array for broadcasting
-            reshape_seg, reshape_vol = np.zeros((segments.shape[0], new_dims, new_dims), np.uint8), np.zeros((segments.shape[0], new_dims, new_dims), np.int16)
-
-            # Slice by slice zoom
-            for z in range(segments.shape[0]):
-                reshape_vol[z] = sdl.zoom_2D(volume[z], [new_dims, new_dims])
-                reshape_seg[z] = sdl.zoom_2D(segments[z], [new_dims, new_dims])
-
-            # Rebroadacast
-            del volume, segments
-            volume, segments = reshape_vol, reshape_seg
-
-        # Normalize the volume: TODO Create mask
-        volume = sdl.normalize(volume).astype(np.float32)
+        # Resize volumes
+        volume = sdl.resize_volume(volume, np.float32, dims, dims)
+        segments = sdl.resize_volume(segments.astype(np.uint8), np.uint8, dims, dims)
 
         # Loop through the image volume
         for z in range (volume.shape[0]):
@@ -138,19 +127,9 @@ def pre_proc_25D(slice_gap, dims):
         # Finished with all of this patients GBMS
         pts += 1
 
-        # Save every 5 patients
-        if pts %15 == 0:
-
-            print ('%s Patients loaded, %s slices saved (%s this protobuf)' %(pts, index, (index-per)))
-
-            sdl.save_tfrecords(data, 1, 0, file_root=('data/GBM_%s' %int(pts/15)))
-
-            del data
-            data = {}
-            per=index
-
     # Finished with all the patients
-    if len(data)>0: sdl.save_tfrecords(data, 1, 'data/GBM_Fin')
+    print('%s Patients loaded, %s slices saved (%s this protobuf)' % (pts, index, (index - per)))
+    if len(data)>0: sdl.save_tfrecords(data, 3, 'data/CUMC_GBM_')
 
 
 # For loading the BRATS files
@@ -164,7 +143,7 @@ def pre_proc_25D_BRATS(slice_gap, dims):
     """
 
     # Load the files
-    filenames = sdl.retreive_filelist('mha', include_subfolders=True, path=home_dir)
+    filenames = sdl.retreive_filelist('mha', include_subfolders=True, path=brats_dir)
     shuffle(filenames)
     print('Filenames: ', filenames)
 
@@ -192,7 +171,7 @@ def pre_proc_25D_BRATS(slice_gap, dims):
         image, _, _ = sdl.load_MHA(lbl_file)
 
         # Generate segment filename and load segments: Edema = 2, Enhancment =4, Encephalomalacia = 1
-        segment_file_raw = sdl.retreive_filelist('mha', include_subfolders=True, path=(home_dir + label + '/' + base + '/'))
+        segment_file_raw = sdl.retreive_filelist('mha', include_subfolders=True, path=(brats_dir + label + '/' + base + '/'))
         segment_file = [x for x in segment_file_raw if 'OT' in x]
         segments, _, _ = sdl.load_MHA(segment_file[0])
         segments = np.squeeze(segments >3)
@@ -226,7 +205,7 @@ def pre_proc_25D_BRATS(slice_gap, dims):
             for s in range(5): data_image[s, :, :] = sdl.zoom_2D(image[zs+(s*sz)].astype(np.float32), [dims, dims])
 
             # Save the dictionary: float32, uint8
-            data[index] = {'image_data': data_image, 'label_data': data_label.astype(np.float32), 'accession':accession,
+            data[index] = {'image_data': data_image, 'label_data': data_label, 'accession':accession,
                            'progression': label, 'file':lbl_file, 'mrn': mrn, 'path': text, 'slice': z}
 
             # Finished with this slice
@@ -272,7 +251,7 @@ def load_protobuf():
     print('Training files: %s' % filenames)
 
     # now load the remaining files
-    data = sdl.load_tfrecords(filenames, FLAGS.box_dims, tf.float32, z_dim=5, segments='label_data')
+    data = sdl.load_tfrecords(filenames, FLAGS.box_dims, tf.float32, z_dim=5, segments='label_data', segments_dtype=tf.uint8)
     print (data['image_data'], data['label_data'])
 
     # Image augmentation. First calc rotation parameters
@@ -328,7 +307,7 @@ def load_validation():
     print('Testing files: %s' % filenames)
 
     # now load the remaining files
-    data = sdl.load_tfrecords(filenames, FLAGS.box_dims, tf.float32, z_dim=5, segments='label_data')
+    data = sdl.load_tfrecords(filenames, FLAGS.box_dims, tf.float32, z_dim=5, segments='label_data', segments_dtype=tf.uint8)
 
     # Reshape image
     data['image_data'] = tf.image.resize_images(data['image_data'], [FLAGS.network_dims, FLAGS.network_dims])
@@ -341,7 +320,6 @@ def load_validation():
     # Return data as a dictionary
     return sdl.val_batches(data, FLAGS.batch_size)
 
-
 def check_labels():
 
     """
@@ -350,11 +328,11 @@ def check_labels():
     """
 
     # Load the files
-    filenames = sdl.retreive_filelist('gz', include_subfolders=True, path='data/raw/')
+    filenames = sdl.retreive_filelist('gz', include_subfolders=True, path=cumc_dir)
     shuffle(filenames)
 
     # Load the labels: {'1': {'LABEL': '1', 'TEXT': 'recurrent, with treatment effect', 'ACCNO': '4178333', 'MRN': '7647499'}, '3': ...
-    label_file = sdl.retreive_filelist('csv', False, 'data/')[0]
+    label_file = sdl.retreive_filelist('csv', False, path='data/')[0]
     labels = sdl.load_CSV_Dict('ID', label_file)
 
     # Now check that all files have labels
