@@ -7,6 +7,7 @@ Non Existant file found: {'LABEL': '1', 'TEXT': 'recurrent?', 'ACCNO': '4522856'
 75 Patients loaded, 9755 slices saved (1884 this protobuf)
 9755 total
 
+75 total CUMC GBMs with 9755 slices: evenly split into 3 protobufs
 65 Patients loaded, 9360 slices saved (9360 this protobuf)
 130 Patients loaded, 18720 slices saved (9360 this protobuf)
 195 Patients loaded, 28080 slices saved (9360 this protobuf)
