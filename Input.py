@@ -82,21 +82,17 @@ def pre_proc_25D(slice_gap, dims):
         # Normalize the MRI
         volume = sdl.normalize_MRI_histogram(volume)
 
-        # Resize volumes
-        volume = sdl.resize_volume(volume, np.float32, dims, dims)
-        segments = sdl.resize_volume(segments.astype(np.uint8), np.uint8, dims, dims)
-
         # Loop through the image volume
-        for z in range (volume.shape[0]):
+        for z in range(0, volume.shape[2]):
 
             # Calculate a scaled slice shift
             sz = int(slice_gap)
 
             # Skip very bottom and very top of image
-            if ((z-3*sz) < 0) or ((z+3*sz) > volume.shape[0]): continue
+            if ((z-3*sz) < 0) or ((z+3*sz) > volume.shape[2]): continue
 
             # Label is easy, just save the slice
-            data_label = sdl.zoom_2D(segments[z].astype(np.uint8), (dims, dims))
+            data_label = sdl.zoom_2D(segments[:, :, z].astype(np.uint8), (dims, dims))
 
             # Generate the empty data array
             data_image = np.zeros(shape=[5, dims, dims], dtype=np.float32)
@@ -105,27 +101,20 @@ def pre_proc_25D(slice_gap, dims):
             zs = z - (2*sz)
 
             # Save 5 slices with shift Sz
-            for s in range(5): data_image[s, :, :] = sdl.zoom_2D(volume[zs+(s*sz)].astype(np.float32), [dims, dims])
+            for s in range(5): data_image[s, :, :] = sdl.zoom_2D(volume[:, :, zs+(s*sz)].astype(np.float32), [dims, dims])
 
-            # If there is label here, save 5x the slices
-            sum_check = np.sum(np.squeeze(data_label > 1).astype(np.uint8))
-            if sum_check > 5: num_egs = int(sum_check/45) + 1
-            else: num_egs = 1
+            # Save the dictionary: int16, uint8, int, int
+            data[index] = {'image_data': data_image, 'label_data': data_label, 'accession':accession, 'progression': label, 'file':vol_file, 'mrn': mrn, 'path': text, 'slice': z}
 
-            for _ in range(num_egs):
-
-                # Save the dictionary: int16, uint8, int, int
-                data[index] = {'image_data': data_image, 'label_data': data_label, 'accession':accession,
-                               'progression': label, 'file':vol_file, 'mrn': mrn, 'path': text, 'slice': z}
-
-                # Finished with this slice
-                index += 1
+            # Finished with this slice
+            index += 1
 
             # Garbage collection
             del data_label, data_image
 
         # Finished with all of this patients GBMS
         pts += 1
+        if pts %5 == 0: print ('%s Patients loaded, %s slices saved' % (pts, index))
 
     # Finished with all the patients
     print('%s Patients loaded, %s slices saved (%s this protobuf)' % (pts, index, (index - per)))
@@ -232,6 +221,7 @@ def pre_proc_25D_BRATS(slice_gap, dims):
         # Finished with all the patients
     if len(data) > 0: sdl.save_tfrecords(data, 1, 'data/BRATS_Fin')
 
+
 # Load the protobuf
 def load_protobuf():
 
@@ -320,6 +310,7 @@ def load_validation():
     # Return data as a dictionary
     return sdl.val_batches(data, FLAGS.batch_size)
 
+
 def check_labels():
 
     """
@@ -371,3 +362,4 @@ def check_labels():
         if not exists: print ('Non Existant file found: %s' %dic)
 
 # pre_proc_25D_BRATS(2, 256)
+# pre_proc_25D(2, 256)

@@ -43,7 +43,7 @@ tf.app.flags.DEFINE_float('l2_gamma', 1e-5, """ The gamma value for regularizati
 
 # Directory control
 tf.app.flags.DEFINE_string('train_dir', 'training/', """Directory to write event logs and save checkpoint files""")
-tf.app.flags.DEFINE_string('RunInfo', 'First_Run/', """Unique file name for this training run""")
+tf.app.flags.DEFINE_string('RunInfo', 'No_Dice/', """Unique file name for this training run""")
 tf.app.flags.DEFINE_integer('GPU', 0, """Which GPU to use""")
 
 # Define a custom training class
@@ -149,9 +149,9 @@ def eval():
                             # display.append(eg[i, 2, :, :])
 
                             # Now create boolean masks
-                            p1[p1 > FLAGS.dice_threshold] = True  # Set predictions above threshold value to True
-                            p1[p1 <= FLAGS.dice_threshold] = False  # Set those below to False
-                            p2[p2 == 1] = False  # Mark lung and background as False
+                            p1[p1 >= FLAGS.dice_threshold] = True  # Set predictions above threshold value to True
+                            p1[p1 < FLAGS.dice_threshold] = False  # Set those below to False
+                            p2[p2 == 0] = False  # Mark lung and background as False
                             p2[p2 > 0] = True  # Mark embolisms as True
 
                             # display.append(p1)
@@ -181,7 +181,7 @@ def eval():
                     DICE_Score = DICE/total
                     print ('DICE Score: %s', (DICE_Score))
                     print('TP: %s, TN: %s, FP: %s, FN: %s, Slices: %s' % (TP, TN, FP, FN, tot))
-                    #print ('Sensitivity: %.2f %%, Specificity: %.2f %%' %((100*TP / (TP + FN)), (100* TN / (TN + FP))))
+                    print ('Sensitivity: %.2f %%, Specificity: %.2f %%' %((100*TP / (TP + FN)), (100* TN / (TN + FP))))
                     try:sdl.display_volume(np.asarray(picd), True)
                     except:pass
 
