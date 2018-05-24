@@ -2,14 +2,10 @@
 Load and preprocess the files to a protobuff
 """
 
-import os
-
 import numpy as np
 import tensorflow as tf
 import SODLoader as SDL
-import matplotlib.pyplot as plt
 
-from scipy import stats
 from pathlib import Path
 
 from random import shuffle
@@ -80,7 +76,7 @@ def pre_proc_25D(slice_gap, dims):
         volume = np.squeeze(sdl.load_NIFTY(vol_file)).astype(np.int16)
 
         # Normalize the MRI
-        volume = sdl.normalize_MRI_histogram(volume)
+        volume = sdl.normalize_MRI_histogram(volume, center_type='mean')
 
         # Loop through the image volume
         for z in range(0, volume.shape[2]):
