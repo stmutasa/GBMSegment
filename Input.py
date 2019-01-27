@@ -5,6 +5,8 @@ Load and preprocess the files to a protobuff
 import numpy as np
 import tensorflow as tf
 import SODLoader as SDL
+import SOD_Display as SDD
+import os
 
 from pathlib import Path
 
@@ -14,10 +16,11 @@ from random import shuffle
 FLAGS = tf.app.flags.FLAGS
 
 # Define the data directory to use
-brats_dir = str(Path.home()) + '/PycharmProjects/Datasets/BRATS2015/'
+brats_dir = str(Path.home()) + '/PycharmProjects/Datasets/BRATS/BRATS2018/'
 cumc_dir = str(Path.home()) + '/PycharmProjects/Datasets/GBM/TxResponse/'
 
 sdl = SDL.SODLoader(data_root=brats_dir)
+sdd = SDD.SOD_Display()
 
 # For loading the files for a 2.5 D network
 def pre_proc_25D(slice_gap, dims):
@@ -35,12 +38,10 @@ def pre_proc_25D(slice_gap, dims):
     # Load the files
     filenames = sdl.retreive_filelist('gz', include_subfolders=True, path=cumc_dir)
     shuffle(filenames)
-    print('Filenames: ', filenames)
 
     # Load the labels: {'1': {'LABEL': '1', 'TEXT': 'recurrent, with treatment effect', 'ACCNO': '4178333', 'MRN': '7647499'}, '3': ...
     label_file = sdl.retreive_filelist('csv', False, 'data/')[0]
     labels = sdl.load_CSV_Dict('ID', label_file)
-    print('Labels: ', labels)
 
     # Counters: index = example, pts = patients
     index, pts, per = 0, 0, 0
@@ -59,6 +60,7 @@ def pre_proc_25D(slice_gap, dims):
 
         # Load the patient info
         accession = int(lbl_file.split('-')[0].split('/')[-1])
+        label, mrn, text = 0, 0, 0
 
         # load label
         for _, dic in labels.items():
@@ -67,6 +69,7 @@ def pre_proc_25D(slice_gap, dims):
                 label = int(dic['LABEL'])
                 mrn = int(dic['MRN'])
                 text = dic['TEXT']
+                break
 
         # Load the segments
         segments = np.squeeze(sdl.load_NIFTY(lbl_file)).astype(np.uint8)
@@ -128,9 +131,8 @@ def pre_proc_25D_BRATS(slice_gap, dims):
     """
 
     # Load the files
-    filenames = sdl.retreive_filelist('mha', include_subfolders=True, path=brats_dir)
+    filenames = sdl.retreive_filelist('nii.gz', include_subfolders=True, path=brats_dir)
     shuffle(filenames)
-    print('Filenames: ', filenames)
 
     # Counters: index = example, pts = patients
     index, pts, per = 0, 0, 0
@@ -145,20 +147,24 @@ def pre_proc_25D_BRATS(slice_gap, dims):
     for lbl_file in filenames:
 
         # Only work on T1C+ sequences
-        if 'T1c' not in lbl_file: continue
+        if 't1ce' not in lbl_file: continue
 
         # Load the patient info
-        base = lbl_file.split('/')[-3]
+        base = lbl_file.split('/')[-1][:-7]
         accession = base.split('_')[-2] + '_' + base.split('_')[-1]
-        label, mrn, text = lbl_file.split('/')[-4], base.split('_')[-2], base.split('_')[1]
+        label, mrn, text = lbl_file.split('/')[-3], base.split('_')[-3], base.split('_')[1] + base.split('_')[0]
 
         # Load the image: BRATS is 1mm resampled, 155, 240 image dims for the T1c
-        image, _, _ = sdl.load_MHA(lbl_file)
+        image = np.squeeze(sdl.load_NIFTY(lbl_file))
+
+        # Retreive the segment file name
+        folder = os.path.dirname(lbl_file)
+        files_here = sdl.retreive_filelist('nii.gz', False, folder)
+        for file in files_here:
+            if 'seg.nii' in file: segment_file = file
 
         # Generate segment filename and load segments: Edema = 2, Enhancment =4, Encephalomalacia = 1
-        segment_file_raw = sdl.retreive_filelist('mha', include_subfolders=True, path=(brats_dir + label + '/' + base + '/'))
-        segment_file = [x for x in segment_file_raw if 'OT' in x]
-        segments, _, _ = sdl.load_MHA(segment_file[0])
+        segments = sdl.load_NIFTY(segment_file)
         segments = np.squeeze(segments >3)
 
         # Normalize the MRI
@@ -247,7 +253,7 @@ def load_protobuf():
     data['image_data'] = tf.contrib.image.rotate(data['image_data'], angle)
     data['label_data'] = tf.contrib.image.rotate(data['label_data'], angle)
 
-    # Random gaussian noise
+    # Random brightness/contrast
     data['image_data'] = tf.image.random_brightness(data['image_data'], max_delta=1.5)
     data['image_data'] = tf.image.random_contrast(data['image_data'], lower=0.95, upper=1.05)
 
@@ -335,6 +341,7 @@ def check_labels():
 
             if int(dic['ACCNO'])==accession2:
                 exists2 = True
+                break
 
         if not exists2: print('No label found: %s' % file)
 
