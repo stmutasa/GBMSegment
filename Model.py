@@ -13,13 +13,14 @@ _author_ = 'simi'
 import tensorflow as tf
 import Input
 import SODNetwork as SDN
+import SOD_DenseNet as SDDN
 
 # Define the FLAGS class to hold our immutable global variables
 FLAGS = tf.app.flags.FLAGS
 
 # Retreive helper function object
 sdn = SDN.SODMatrix()
-
+sdloss = SDN.SODLoss(2)
 
 def forward_pass_dense(images, phase_train):
 
@@ -31,11 +32,11 @@ def forward_pass_dense(images, phase_train):
     :return: l2: the value of the l2 loss
     """
 
-    # Define the Dense UNet
-    dun = SDN.DenseUnet(nb_blocks=5, filters=6, images=images, phase_train=phase_train)
+    # DenseNet class
+    sddn = SDDN.DenseUnet(nb_blocks=5, filters=6, images=images, phase_train=phase_train)
 
     # Now run the network
-    conv = dun.define_network_25D(layers=[2, 4, 8, 16, 32], keep_prob=FLAGS.dropout_factor)
+    conv = sddn.define_network_25D(layers=[2, 4, 8, 16, 32], keep_prob=FLAGS.dropout_factor)
 
     # Output is a 1x1 box with 3 labels
     Logits = sdn.convolution('Logits', conv, 1, FLAGS.num_classes, S=1, phase_train=phase_train, BN=False, relu=False, bias=False)
@@ -123,7 +124,7 @@ def forward_pass_res(images, phase_train):
     return Logits, sdn.calc_L2_Loss(FLAGS.l2_gamma)
 
 
-def total_loss(logitz, labelz, num_classes=2, class_weights=None, loss_type=None):
+def total_loss(logits_tmp, labels_tmp, num_classes=2, class_weights=None, loss_type=None):
 
     """
     Cost function
@@ -136,7 +137,7 @@ def total_loss(logitz, labelz, num_classes=2, class_weights=None, loss_type=None
     """
 
     # Reduce dimensionality
-    labelz, logits = tf.squeeze(labelz), tf.squeeze(logitz)
+    labelz, logits = tf.squeeze(labels_tmp), tf.squeeze(logits_tmp)
 
     # Remove background label
     labels = tf.cast(labelz, tf.uint8)
@@ -144,39 +145,32 @@ def total_loss(logitz, labelz, num_classes=2, class_weights=None, loss_type=None
     # Summary images
     imeg = int(FLAGS.batch_size/2)
     tf.summary.image('Labels', tf.reshape(tf.cast(labels[imeg], tf.float32), shape=[1, FLAGS.network_dims, FLAGS.network_dims, 1]), 2)
-    tf.summary.image('Logits', tf.reshape(logitz[imeg,:,:,1], shape=[1, FLAGS.network_dims, FLAGS.network_dims, 1]), 2)
+    tf.summary.image('Logits', tf.reshape(logits_tmp[imeg,:,:,1], shape=[1, FLAGS.network_dims, FLAGS.network_dims, 1]), 2)
 
     if loss_type=='DICE':
 
-        # Make labels one hot
-        labels = tf.cast(tf.one_hot(labels, depth=FLAGS.num_classes, dtype=tf.uint8), tf.float32)
+        # Get the generalized DICE loss
+        loss = sdloss.generalized_dice_loss(logits_tmp, labels_tmp, weight_map=class_weights, type_weight='Square')
 
-        # Flatten
-        logits = tf.reshape(logits, [-1, num_classes])
-        labels = tf.reshape(labels, [-1, num_classes])
+    elif loss_type=='DICE_X':
 
-        # To prevent number errors:
-        eps = 1e-5
+        # Get the sum of the cross entropy and DICE loss
+        loss = sdloss.dice_plus_xent_loss(logits_tmp, labels_tmp, weight_map=class_weights)
 
-        # Calculate softmax:
-        logits = tf.nn.softmax(logits)
+    elif loss_type=='SN_SP':
 
-        # Find the intersection
-        intersection = 2*tf.reduce_sum(logits * labels)
+        # Get the sum of r(specificity) and (1-r)(sensitivity) loss
+        loss = sdloss.sensitivity_specificity_loss(logits_tmp, labels_tmp, weight_map=class_weights, r=0.05)
 
-        # find the union
-        union = eps + tf.reduce_sum(logits) + tf.reduce_sum(labels)
+    elif loss_type=='WAS':
 
-        # Calculate the loss
-        dice = intersection/union
-
-        # Output the training DICE score
-        tf.summary.scalar('DICE_Score', dice)
-
-        # 1-DICE since we want better scores to have lower loss
-        loss = 1 - dice
+        # Get the the pixel-wise Wasserstein distance between the prediction and the labels (ground_truth) with respect
+        #     to the distance matrix on the label space M.
+        loss = sdloss.wasserstein_disagreement_map(logits_tmp, labels_tmp, weight_map=class_weights)
 
     else:
+
+        # Classic cross entropy
 
         # Make labels one hot
         labels = tf.cast(tf.one_hot(labels, depth=FLAGS.num_classes, dtype=tf.uint8), tf.float32)
