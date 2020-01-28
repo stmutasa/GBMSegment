@@ -16,7 +16,7 @@ import imageio
 sdl = SDL.SODLoader('data')
 sdd = SDD.SOD_Display()
 
-home_dir = '/home/stmutasa/PycharmProjects/Datasets/GBM/gbms'
+home_dir = '/home/stmutasa/PycharmProjects/Datasets/GBM/Raw_Downloaded_GBMS2'
 
 def sort_DICOMs():
 
@@ -255,4 +255,4 @@ def load_DICOM_3D(path, dtype=np.int16, sort=False, overwrite_dims=513, display=
     else:
         return image, numpyOrigin, numpySpacing, dims
 
-sort_DICOMs2()
+sort_DICOMs()
