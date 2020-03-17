@@ -16,7 +16,7 @@ import imageio
 sdl = SDL.SODLoader('data')
 sdd = SDD.SOD_Display()
 
-home_dir = '/home/stmutasa/PycharmProjects/Datasets/GBM/Raw_Downloaded_GBMS2'
+home_dir = '/home/stmutasa/Code/Datasets/GBM/GBM_Redownloads/'
 
 def sort_DICOMs():
 
@@ -29,8 +29,6 @@ def sort_DICOMs():
     """
 
     # First retreive lists of the the filenames
-    interleaved = sdl.retreive_filelist('**', path=home_dir, include_subfolders=True)
-    shuffle(interleaved)
     folders = list()
     for (dirpath, dirnames, filenames) in os.walk(home_dir):
         if filenames: folders.append(dirpath)
@@ -43,22 +41,21 @@ def sort_DICOMs():
     for folder in folders:
 
         try:
-            # Read multiple volumes with Imageio (multiple DICOM series)
-            vols = imageio.mvolread(folder, 'DICOM')
+            vols = load_DICOM_VOLS(folder)
+            key = next(iter(vols))
+            header = vols[key]['header']
         except Exception as e:
             print('Image Error: %s,  --- Folder: %s' % (e, folder))
             continue
 
         try:
             # Get header the old way
-            header = sdl.load_DICOM_Header(folder)
             Accno = header['tags'].AccessionNumber
             MRN = header['tags'].PatientID
-
         except Exception as e:
             # Print error then make a dummy header
             print('Header Error: %s,  --- Folder: %s' % (e, folder))
-            Accno = folder.split('/')[6]
+            Accno = folder.split('/')[-2]
             MRN = ('UknownMRN_%s' %patient)
             header = {'MRN': MRN, 'Accno': Accno, 'path': folder}
 
@@ -66,9 +63,10 @@ def sort_DICOMs():
          TODO: Sort the folders and save as niftis
         """
 
-        for volume in vols:
+        for series, dict in vols.items():
 
             # Convert to numpy
+            volume = dict['volume']
             volume = np.asarray(volume, np.int16)
             center = volume[volume.shape[0] // 2]
 
@@ -76,11 +74,12 @@ def sort_DICOMs():
             if volume.shape[0] <= 20: continue
 
             # Get savefile names
-            save_root = home_dir + '/Sorted'
-            fname_vol = ('%s/%s_%s_%s_%s.nii.gz' %(save_root, patient, MRN, Accno, study))
-            fname_gif = fname_vol.replace('nii.gz', 'gif')
+            series = series.replace('(', '').replace(')', '')
+            save_root = home_dir.replace('GBM_Redownloads/', 'Sorted')
+            fname_vol = ('%s/%s_%s_%s_%s.nii.gz' %(save_root, series, MRN, Accno, study))
             fname_header = fname_vol.replace('nii.gz', 'p')
-            img_path = fname_gif.replace('gif', 'jpg')
+            # fname_gif = fname_vol.replace('nii.gz', 'gif')
+            # img_path = fname_gif.replace('gif', 'jpg')
 
             # Create the root folder
             if not os.path.exists(os.path.dirname(fname_vol)): os.mkdir(os.path.dirname(fname_vol))
@@ -89,9 +88,9 @@ def sort_DICOMs():
             print('Saving: ', os.path.basename(fname_vol))
 
             try:
-                sdl.save_gif_volume(volume, fname_gif)
+                # sdl.save_gif_volume(volume, fname_gif)
+                # sdl.save_image(center, img_path)
                 sdl.save_volume(volume, fname_vol, compress=True)
-                sdl.save_image(center, img_path)
             except Exception as e:
                 print('\nSaving Error %s: %s,  --- Folder: %s' % (volume.shape, e, folder))
                 continue
@@ -102,8 +101,8 @@ def sort_DICOMs():
 
         # Save the header
         with open(fname_header, 'wb') as fp: pickle.dump(header, fp, protocol=pickle.HIGHEST_PROTOCOL)
-        # with open(fname_header, 'w') as fp: json.dump(header, fp)
         patient +=1
+        del vols
 
 
 def sort_DICOMs2():
@@ -190,7 +189,20 @@ def sort_DICOMs2():
         last_MRN = MRN
 
 
-def load_DICOM_3D(path, dtype=np.int16, sort=False, overwrite_dims=513, display=False, return_header=False):
+def load_DICOM_VOLS(path):
+
+    """
+    This function loads a bunch of jumbled together DICOMs as separate volumes
+    :param: path: The path of the DICOM folder
+    :param: overwrite_dims = In case slice dimensions can't be retreived, define overwrite dimensions here
+    :param: display = Whether to display debug text
+    :param return_header = whether to return the header dictionary
+    :return: image = A 3D numpy array of the image
+    :return header: a dictionary of the file's header information
+    """
+
+    # Array of DICOM objects to make
+    volumes, save_dict = {}, {}
 
     # Some DICOMs end in .dcm, others do not
     fnames = list()
@@ -198,61 +210,59 @@ def load_DICOM_3D(path, dtype=np.int16, sort=False, overwrite_dims=513, display=
         fnames += [os.path.join(dirpath, file) for file in filenames]
 
     # Load the dicoms
-    ndimage = [dicom.read_file(path, force=True) for path in fnames]
+    dicoms = [dicom.read_file(path, force=True) for path in fnames]
 
-    # # Calculate how many volumes are interleaved here
-    # sort_list = np.asarray([x.SliceLocation for x in ndimage], np.int16)
-    # _, counts = np.unique(sort_list, return_counts=True)
-    # repeats = np.max(counts)
+    # Check for actual images
+    def _SPP_Exists(dcm):
+        try:
+            _ = dcm.SamplesPerPixel, dcm.ImagePositionPatient
+            return True
+        except: return False
 
-    # Sort the slices
-    if sort:
-        if 'Lung' in sort: ndimage = sdl.sort_DICOMS_Lung(ndimage, display, path)
-        elif 'PE' in sort: ndimage = sdl.sort_DICOMS_PE(ndimage, display, path)
-    ndimage, fnames, orientation, st, shape, four_d = sdl.sort_dcm(ndimage, fnames)
-    ndimage.sort(key=lambda x: int(x.ImagePositionPatient[2]))
+    # Get images only using SamplesPerPixel
+    _dicoms = [x for x in dicoms if _SPP_Exists(x)]
 
-    # Retreive the dimensions of the scan
-    try: dims = np.array([int(ndimage[0].Columns), int(ndimage[0].Rows)])
-    except: dims = np.array([overwrite_dims, overwrite_dims])
+    # Now go through and add to unique volumes
+    for dcm in _dicoms:
+        SIUID = dcm.SeriesInstanceUID
+        if SIUID in volumes.keys():
+            volumes[SIUID].append(dcm)
+        else: volumes[SIUID] = []
 
-    # Retreive the spacing of the pixels in the XY dimensions
-    pixel_spacing = ndimage[0].PixelSpacing
+    del _dicoms
 
-    # Create spacing matrix
-    numpySpacing = np.array([st, float(pixel_spacing[0]), float(pixel_spacing[1])])
+    # Now work on each volume separately
+    for SIUD, dicoms in volumes.items():
 
-    # Retreive the origin of the scan
-    orig = ndimage[0].ImagePositionPatient
+        # Sort the slices
+        dicoms.sort(key=lambda x: int(x.ImagePositionPatient[2]))
 
-    # Make a numpy array of the origin
-    numpyOrigin = np.array([float(orig[2]), float(orig[0]), float(orig[1])])
+        # --- Save first slice for header information
+        header = {'tags': dicoms[0]}
 
-    # --- Save first slice for header information
-    header = {'orientation': orientation, 'slices': shape[1], 'channels': shape[0], 'num_Interleaved': 1,
-              'fnames': fnames, 'tags': ndimage[0], '4d': four_d, 'spacing': numpySpacing, 'origin': numpyOrigin}
+        # Finally, load pixel data. You can use Imageio here
+        try: image = np.stack([sdl.read_dcm_uncompressed(s) for s in dicoms])
+        except: image = imageio.volread(path, 'DICOM')
+        image = sdl.compress_bits(image)
 
-    # Finally, make the image actually equal to the pixel data and not the header
-    image = np.stack([sdl.read_dcm_uncompressed(s) for s in ndimage])
+        # Convert to Houndsfield units
+        if hasattr(dicoms[0], 'RescaleIntercept') and hasattr(dicoms[0], 'RescaleSlope'):
+            for slice_number in range(len(dicoms)):
+                intercept = dicoms[slice_number].RescaleIntercept
+                slope = dicoms[slice_number].RescaleSlope
 
-    image = sdl.compress_bits(image)
+                image[slice_number] = slope * image[slice_number].astype(np.float64)
+                image[slice_number] = image[slice_number].astype('int16')
+                image[slice_number] += np.int16(intercept)
 
-    # Set image data type to the type specified
-    image = image.astype(dtype)
+        # Get description and save dictionary
+        SDesc = str(dicoms[0].SeriesDescription)
+        if SDesc in save_dict.keys():
+            SDesc = SDesc + ('_' + str(dicoms[0].SeriesNumber))
+        save_dict[SDesc] = {'header': header, 'volume': image}
 
-    # Convert to Houndsfield units
-    if hasattr(ndimage[0], 'RescaleIntercept') and hasattr(ndimage[0], 'RescaleSlope'):
-        for slice_number in range(len(ndimage)):
-            intercept = ndimage[slice_number].RescaleIntercept
-            slope = ndimage[slice_number].RescaleSlope
-
-            image[slice_number] = slope * image[slice_number].astype(np.float64)
-            image[slice_number] = image[slice_number].astype('int16')
-            image[slice_number] += np.int16(intercept)
-
-    if return_header:
-        return image, header
-    else:
-        return image, numpyOrigin, numpySpacing, dims
+    # Return if not empty
+    if not save_dict: return
+    else: return save_dict
 
 sort_DICOMs()

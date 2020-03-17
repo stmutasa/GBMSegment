@@ -9,14 +9,14 @@ import time
 
 import Model as network
 import SODTester as SDT
-import SODLoader as SDL
+import SOD_Display as SDD
 import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 
 # Define an instance of the loader and testing file
-sdl = SDL.SODLoader(os.getcwd())
 sdt = SDT.SODTester(False, False)
+sdd = SDD.SOD_Display()
 
 _author_ = 'Simi'
 
@@ -31,14 +31,14 @@ tf.app.flags.DEFINE_integer('network_dims', 128, """dimensions for the network i
 tf.app.flags.DEFINE_integer('num_classes', 2, """Number of classes""")
 
 # Define some of the immutable variables
-tf.app.flags.DEFINE_integer('epoch_size', 10000, """How many examples""")
-tf.app.flags.DEFINE_integer('batch_size', 64, """Number of images to process in a batch.""")
+tf.app.flags.DEFINE_integer('epoch_size', 10000, """How many images""")
+tf.app.flags.DEFINE_integer('batch_size', 256, """Number of images to process in a batch.""")
 
 # Hyperparameters:
 tf.app.flags.DEFINE_float('dropout_factor', 1.0, """ Keep probability""")
 tf.app.flags.DEFINE_float('moving_avg_decay', 0.999, """ The decay rate for the moving average tracker""")
-tf.app.flags.DEFINE_float('dice_threshold', 0.5, """ The threshold value to declare positive""")
-tf.app.flags.DEFINE_float('size_threshold', 1.0, """ The size threshold value to declare detected PE""")
+tf.app.flags.DEFINE_float('dice_threshold', 0.75, """ The threshold value to declare positive""")
+tf.app.flags.DEFINE_float('size_threshold', 5.0, """ The size threshold value to declare detected tumor""")q
 tf.app.flags.DEFINE_float('l2_gamma', 1e-5, """ The gamma value for regularization loss""")
 
 # Directory control
@@ -50,7 +50,7 @@ tf.app.flags.DEFINE_integer('GPU', 1, """Which GPU to use""")
 def eval():
 
     # Makes this the default graph where all ops will be added
-    with tf.Graph().as_default(), tf.device('cpu:0'):
+    with tf.Graph().as_default(), tf.device('/gpu:' + str(FLAGS.GPU)):
 
         # Load the images and labels.
         _, validation = network.inputs(skip=True)
@@ -120,6 +120,8 @@ def eval():
                 # Use slim to handle queues:
                 with slim.queues.QueueRunners(mon_sess):
 
+                    picd, display = [], []
+
                     for i in range(max_steps):
 
                         # Retreive the predictions and labels
@@ -136,7 +138,6 @@ def eval():
                         p11 = np.squeeze(preds.astype(np.float))
                         l11 = np.squeeze(labs.astype(np.float))
                         eg = np.squeeze(egs['image_data'].astype(np.float))
-                        picd, display = [], []
 
                         for i in range(FLAGS.batch_size):
 
@@ -165,12 +166,11 @@ def eval():
                             tot += 1
 
                             # Generate an overlay display
-                            if np.sum(p2) > 5: picd.append(sdl.display_overlay(eg[i, 2, :, :], p1))
-
-                        # sdl.display_volume(np.asarray(display), True)
+                            # if np.sum(p2) > 5: picd.append(sdd.return_image_overlay(eg[i, 2, :, :], p1))
+                            picd.append(sdd.return_image_overlay(eg[i, 2, :, :], p1))
 
                         # Garbage collection
-                        del preds, labs, egs, eg, picd, p1, p2
+                        del preds, labs, egs, eg, p1, p2
 
                         # Increment step
                         step += 1
@@ -182,8 +182,9 @@ def eval():
                     print ('DICE Score: %s', (DICE_Score))
                     print('TP: %s, TN: %s, FP: %s, FN: %s, Slices: %s' % (TP, TN, FP, FN, tot))
                     print ('Sensitivity: %.2f %%, Specificity: %.2f %%' %((100*TP / (TP + FN)), (100* TN / (TN + FP))))
-                    try:sdl.display_volume(np.asarray(picd), True)
+                    try:sdd.display_volume(np.asarray(picd), True)
                     except:pass
+                    del picd, display
 
             # Print divider
             print('-' * 70)
