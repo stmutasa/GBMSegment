@@ -194,9 +194,6 @@ def load_DICOM_VOLS(path):
     """
     This function loads a bunch of jumbled together DICOMs as separate volumes
     :param: path: The path of the DICOM folder
-    :param: overwrite_dims = In case slice dimensions can't be retreived, define overwrite dimensions here
-    :param: display = Whether to display debug text
-    :param return_header = whether to return the header dictionary
     :return: image = A 3D numpy array of the image
     :return header: a dictionary of the file's header information
     """
