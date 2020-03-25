@@ -16,7 +16,7 @@ import imageio
 sdl = SDL.SODLoader('data')
 sdd = SDD.SOD_Display()
 
-home_dir = '/home/stmutasa/PycharmProjects/Datasets/GBM/Raw_Downloaded_GBMS2'
+home_dir = '/home/stmutasa/PycharmProjects/Datasets/GBM/GBM_Redownloads/'
 
 def sort_DICOMs():
 
