@@ -46,8 +46,8 @@ tf.app.flags.DEFINE_float('beta2', 0.999, """ The beta 1 value for the adam opti
 
 # Directory control
 tf.app.flags.DEFINE_string('train_dir', 'training/', """Directory to write event logs and save checkpoint files""")
-tf.app.flags.DEFINE_string('RunInfo', 'New1_DICE_X/', """Unique file name for this training run""")
-tf.app.flags.DEFINE_integer('GPU', 1, """Which GPU to use""")
+tf.app.flags.DEFINE_string('RunInfo', 'New1_OldDICE/', """Unique file name for this training run""")
+tf.app.flags.DEFINE_integer('GPU', 0, """Which GPU to use""")
 
 def train():
 
@@ -64,7 +64,7 @@ def train():
         logits, l2loss = network.forward_pass_res(data['image_data'], phase_train=phase_train)
 
         # Calculate loss
-        SCE_loss = network.total_loss(logits, data['label_data'], loss_type='DICE_X')
+        SCE_loss = network.total_loss(logits, data['label_data'], loss_type='DICE')
 
         # Add the L2 regularization loss
         loss = tf.add(SCE_loss, l2loss, name='TotalLoss')
@@ -144,7 +144,7 @@ def train():
 
                         # Now print the loss values
                         print ('-'*70)
-                        print('Epoch: %s, Time: %.1f sec, L2 Loss: %.4f, Cross Entropy: %.4f, Total Loss (ppm): %.4f, Eg/s: %.4f, Seconds Per: %.4f'
+                        print('Epoch: %s, Time: %.1f sec, L2 Loss (ppm): %.4f, Prediction Loss (ppm): %.4f, Total Loss (ppm): %.4f, Eg/s: %.4f, Seconds Per: %.4f'
                               % (Epoch, elapsed, l2, sce, tot, FLAGS.batch_size/elapsed, elapsed/FLAGS.batch_size))
 
                         # Run a session to retrieve our summaries

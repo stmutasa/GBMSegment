@@ -149,8 +149,39 @@ def total_loss(logits_tmp, labels_tmp, num_classes=2, class_weights=None, loss_t
 
     if loss_type=='DICE':
 
-        # Get the generalized DICE loss
-        loss = sdloss.generalized_dice_loss(logits_tmp, labels_tmp, weight_map=class_weights, type_weight='Square')
+        # # Get the generalized DICE loss
+        # loss = sdloss.generalized_dice_loss(logits_tmp, labels_tmp, weight_map=class_weights, type_weight='Square')
+
+        # Flatten
+        logits = tf.reshape(logits_tmp, [-1, num_classes])
+        labels = tf.reshape(labels_tmp, [-1, 1])
+
+        # To prevent number errors:
+        eps = 1e-5
+
+        # Find the intersection. Multiplication gets broadcast
+        intersection = 2 * tf.reduce_sum(logits * labels) + eps
+
+        # find the union.
+        union = eps + tf.reduce_sum(logits) + tf.reduce_sum(labels)
+
+        """
+        Some explanation of this hacked DICE score
+        The intersection over union won't add up to a real dice score 
+        but the drive of the network will still be to maximise the dice coefficient
+        It does this by trying to make the numbers in the intersection as big as possible 
+        while keeping the numbers in the union but not the intersection as small as possible
+        """
+
+        # Calculate the loss
+        dice = intersection / union
+
+        # Output the training DICE score
+        tf.summary.scalar('DICE_Score', dice)
+
+        # 1-DICE since we want better scores to have lower loss
+        loss = 1 - dice
+
 
     elif loss_type=='DICE_X':
 
